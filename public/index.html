@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="My Sound Bar" />
+  <link rel="apple-touch-icon" href="icon.png" />
+  <title>Sound Island</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      height: 100vh;
+      font-family: sans-serif;
+    }
+
+    #island {
+      margin-top: 30px;
+      width: 220px;
+      height: 70px;
+      background: rgba(30, 30, 30, 0.9);
+      border-radius: 35px;
+      box-shadow: 0 0 10px #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .bar-wrapper {
+      display: flex;
+      gap: 4px;
+    }
+
+    .bar {
+      width: 6px;
+      height: 30px;
+      background: #888;
+      border-radius: 3px;
+      transition: height 0.1s ease, background 0.1s ease;
+    }
+
+    #volume {
+      color: #aaa;
+      margin-top: 15px;
+      text-align: center;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <div id="island">
+      <div class="bar-wrapper">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+      </div>
+    </div>
+    <div id="volume">🎙 마이크 확인 중...</div>
+  </div>
+
+  <script>
+    const bars = document.querySelectorAll('.bar');
+    const volumeText = document.getElementById('volume');
+    const MAX_DB = 320;
+
+    async function initMic() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = ctx.createAnalyser();
+        const mic = ctx.createMediaStreamSource(stream);
+        const dataArray = new Uint8Array(analyser.fftSize);
+        mic.connect(analyser);
+
+        function animate() {
+          analyser.getByteTimeDomainData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            const v = (dataArray[i] - 128) / 128;
+            sum += v * v;
+          }
+          const rms = Math.sqrt(sum / dataArray.length);
+          let db = 20 * Math.log10(rms);
+          db = isFinite(db) ? Math.max(0, db + 100) : 0;
+          const normalized = Math.min(db, MAX_DB) / MAX_DB;
+
+          bars.forEach((bar, i) => {
+            const height = 10 + normalized * 60 * (0.8 + Math.random() * 0.4); // 약간 랜덤
+            bar.style.height = `${height}px`;
+            bar.style.background = `hsl(${Math.random() * 360}, 100%, 60%)`;
+          });
+
+          volumeText.textContent = `🔊 ${db.toFixed(2)} dB`;
+          requestAnimationFrame(animate);
+        }
+
+        animate();
+      } catch (err) {
+        volumeText.textContent = '❌ 마이크 접근 실패!';
+        console.error(err);
+      }
+    }
+
+    initMic();
+  </script>
+</body>
+</html>
