@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Music Visualizer" />
   <link rel="apple-touch-icon" href="icon.png" />
-  <title>Music Visualizer - Club Style</title>
+  <title>Music Visualizer - File Upload</title>
   <style>
     body {
       background: linear-gradient(135deg, #ff69b4 0%, #1e90ff 100%);
@@ -22,6 +22,7 @@
       height: 100vh;
       overflow: hidden;
       margin: 0;
+      padding: 20px;
     }
 
     @keyframes bgAnimation {
@@ -52,17 +53,26 @@
     #volume {
       font-size: 1rem;
       text-shadow: 1px 1px 5px #000;
+      margin-bottom: 15px;
     }
 
-    audio {
-      margin-top: 20px;
+    input[type="file"] {
+      margin-bottom: 15px;
+      color: white;
+      background: rgba(255, 255, 255, 0.15);
+      border: none;
+      padding: 10px;
+      border-radius: 10px;
+      cursor: pointer;
       width: 90%;
       max-width: 600px;
+      font-size: 1rem;
       outline: none;
     }
   </style>
 </head>
 <body>
+  <input type="file" id="file-input" accept="audio/*" />
   <div id="bar-container">
     <div class="sound-bar" id="b0"></div>
     <div class="sound-bar" id="b1"></div>
@@ -72,13 +82,9 @@
     <div class="sound-bar" id="b5"></div>
   </div>
 
-  <div id="volume">🎵 노래 재생 대기 중...</div>
+  <div id="volume">🎵 파일을 선택하세요!</div>
 
-  <audio id="audio" controls crossorigin="anonymous" >
-    <source src="https://cdn.pixabay.com/download/audio/2021/11/03/audio_27d8e95a67.mp3?filename=night-ride-127560.mp3" type="audio/mpeg" />
-    <!-- 무료 배경음악 (Pixabay) -->
-    브라우저가 audio 태그를 지원하지 않습니다.
-  </audio>
+  <audio id="audio" controls style="width: 90%; max-width: 600px; display: none;"></audio>
 
   <script>
     const bars = [];
@@ -86,23 +92,21 @@
       bars.push(document.getElementById('b' + i));
     }
     const volumeText = document.getElementById('volume');
-    const MAX_HEIGHT = 200; // 최대 바 높이(px)
-
     const audio = document.getElementById('audio');
+    const fileInput = document.getElementById('file-input');
+
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 64; // 해상도 조절 (낮으면 성능↑)
+    let analyser = audioContext.createAnalyser();
+    analyser.fftSize = 64;
+    let source;
 
-    const source = audioContext.createMediaElementSource(audio);
-    source.connect(analyser);
-    analyser.connect(audioContext.destination);
-
-    const frequencyData = new Uint8Array(analyser.frequencyBinCount);
+    const MAX_HEIGHT = 200;
 
     function animate() {
+      if(!analyser) return;
+      const frequencyData = new Uint8Array(analyser.frequencyBinCount);
       analyser.getByteFrequencyData(frequencyData);
 
-      // frequencyData는 배열이 크면 32 이상임. 6개로 쪼개기
       const step = Math.floor(frequencyData.length / 6);
 
       for(let i=0; i<6; i++){
@@ -111,30 +115,43 @@
           sum += frequencyData[i*step + j];
         }
         const avg = sum / step;
-
-        // 높이 비율 계산 (0~MAX_HEIGHT)
         const height = (avg / 255) * MAX_HEIGHT;
-
         if(bars[i]){
           bars[i].style.height = height + 'px';
           bars[i].style.background = `linear-gradient(180deg, hsl(${Math.random()*360},100%,70%), hsl(${Math.random()*360},100%,70%))`;
         }
       }
 
-      // 볼륨 텍스트 업데이트 (평균 볼륨)
       const avgVolume = frequencyData.reduce((a,b) => a+b, 0) / frequencyData.length;
       volumeText.textContent = `🎧 현재 볼륨: ${avgVolume.toFixed(1)}`;
 
       requestAnimationFrame(animate);
     }
 
-    // 오디오 재생 시 AudioContext resume 필요 (특히 모바일)
-    audio.onplay = () => {
+    fileInput.addEventListener('change', (e) => {
+      const files = e.target.files;
+      if(files.length === 0) return;
+
+      const file = files[0];
+      const fileURL = URL.createObjectURL(file);
+      audio.src = fileURL;
+      audio.style.display = 'block';
+      audio.play();
+
+      if(source) {
+        source.disconnect();
+      }
+
+      source = audioContext.createMediaElementSource(audio);
+      source.connect(analyser);
+      analyser.connect(audioContext.destination);
+
       if(audioContext.state === 'suspended'){
         audioContext.resume();
       }
+
       animate();
-    }
+    });
   </script>
 </body>
 </html>
