@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Stereo Sound Bars" />
+  <meta name="apple-mobile-web-app-title" content="Music Visualizer" />
   <link rel="apple-touch-icon" href="icon.png" />
-  <title>Club Sound Visualizer</title>
+  <title>Music Visualizer - Club Style</title>
   <style>
     body {
       background: linear-gradient(135deg, #ff69b4 0%, #1e90ff 100%);
@@ -21,6 +21,7 @@
       justify-content: center;
       height: 100vh;
       overflow: hidden;
+      margin: 0;
     }
 
     @keyframes bgAnimation {
@@ -29,126 +30,111 @@
       100% { background-position: 0% 50%; }
     }
 
-    .bar-wrapper {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
+    #bar-container {
+      display: flex;
       gap: 15px;
       width: 90%;
       max-width: 600px;
+      height: 200px;
+      align-items: flex-end;
       margin-bottom: 20px;
     }
 
-    .bar-container {
-      height: 25px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      overflow: hidden;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-    }
-
     .sound-bar {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #ff00ff, #00ffff);
-      transition: width 0.1s ease-out;
+      width: 40px;
+      height: 10px;
+      background: linear-gradient(180deg, #ff00ff, #00ffff);
+      border-radius: 12px 12px 0 0;
       box-shadow: 0 0 10px #fff;
-    }
-
-    #labels {
-      display: flex;
-      justify-content: space-between;
-      width: 90%;
-      max-width: 600px;
-      font-size: 0.9rem;
-      color: #fff;
-      text-shadow: 1px 1px 5px #000;
+      transition: height 0.1s ease-out;
     }
 
     #volume {
-      margin-top: 10px;
       font-size: 1rem;
       text-shadow: 1px 1px 5px #000;
+    }
+
+    audio {
+      margin-top: 20px;
+      width: 90%;
+      max-width: 600px;
+      outline: none;
     }
   </style>
 </head>
 <body>
-  <div class="bar-wrapper" id="bars">
-    <!-- 왼쪽 채널 -->
-    <div class="bar-container"><div class="sound-bar" id="l1"></div></div>
-    <div class="bar-container"><div class="sound-bar" id="l2"></div></div>
-    <div class="bar-container"><div class="sound-bar" id="l3"></div></div>
-    <!-- 오른쪽 채널 -->
-    <div class="bar-container"><div class="sound-bar" id="r1"></div></div>
-    <div class="bar-container"><div class="sound-bar" id="r2"></div></div>
-    <div class="bar-container"><div class="sound-bar" id="r3"></div></div>
+  <div id="bar-container">
+    <div class="sound-bar" id="b0"></div>
+    <div class="sound-bar" id="b1"></div>
+    <div class="sound-bar" id="b2"></div>
+    <div class="sound-bar" id="b3"></div>
+    <div class="sound-bar" id="b4"></div>
+    <div class="sound-bar" id="b5"></div>
   </div>
 
-  <div id="labels">
-    <span>👈 LEFT</span>
-    <span>RIGHT 👉</span>
-  </div>
+  <div id="volume">🎵 노래 재생 대기 중...</div>
 
-  <div id="volume">🎙 마이크 대기 중...</div>
+  <audio id="audio" controls crossorigin="anonymous" >
+    <source src="https://cdn.pixabay.com/download/audio/2021/11/03/audio_27d8e95a67.mp3?filename=night-ride-127560.mp3" type="audio/mpeg" />
+    <!-- 무료 배경음악 (Pixabay) -->
+    브라우저가 audio 태그를 지원하지 않습니다.
+  </audio>
 
   <script>
-    const leftBars = ['l1', 'l2', 'l3'].map(id => document.getElementById(id));
-    const rightBars = ['r1', 'r2', 'r3'].map(id => document.getElementById(id));
+    const bars = [];
+    for(let i=0; i<6; i++){
+      bars.push(document.getElementById('b' + i));
+    }
     const volumeText = document.getElementById('volume');
-    const MAX_DB = 100;
+    const MAX_HEIGHT = 200; // 최대 바 높이(px)
 
-    async function initMic() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const analyser = audioContext.createAnalyser();
-        const mic = audioContext.createMediaStreamSource(stream);
-        mic.connect(analyser);
+    const audio = document.getElementById('audio');
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 64; // 해상도 조절 (낮으면 성능↑)
 
-        const dataArray = new Uint8Array(analyser.fftSize);
+    const source = audioContext.createMediaElementSource(audio);
+    source.connect(analyser);
+    analyser.connect(audioContext.destination);
 
-        function getDB(analyser, dataArray) {
-          analyser.getByteTimeDomainData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) {
-            const val = (dataArray[i] - 128) / 128;
-            sum += val * val;
-          }
-          const rms = Math.sqrt(sum / dataArray.length);
-          let db = 20 * Math.log10(rms);
-          return isFinite(db) ? Math.max(0, db + 80) : 0;
+    const frequencyData = new Uint8Array(analyser.frequencyBinCount);
+
+    function animate() {
+      analyser.getByteFrequencyData(frequencyData);
+
+      // frequencyData는 배열이 크면 32 이상임. 6개로 쪼개기
+      const step = Math.floor(frequencyData.length / 6);
+
+      for(let i=0; i<6; i++){
+        let sum = 0;
+        for(let j=0; j<step; j++){
+          sum += frequencyData[i*step + j];
         }
+        const avg = sum / step;
 
-        function animate() {
-          const db = getDB(analyser, dataArray);
-          volumeText.textContent = `🔊 Volume: ${db.toFixed(1)} dB`;
+        // 높이 비율 계산 (0~MAX_HEIGHT)
+        const height = (avg / 255) * MAX_HEIGHT;
 
-          // 왼쪽 바
-          leftBars.forEach(bar => {
-            if (!bar) return;
-            const width = Math.min(db * (0.8 + Math.random() * 0.4), MAX_DB) / MAX_DB * 100;
-            bar.style.width = width + "%";
-            bar.style.background = `linear-gradient(90deg, hsl(${Math.random()*360},100%,70%), hsl(${Math.random()*360},100%,70%))`;
-          });
-
-          // 오른쪽 바
-          rightBars.forEach(bar => {
-            if (!bar) return;
-            const width = Math.min(db * (0.8 + Math.random() * 0.4), MAX_DB) / MAX_DB * 100;
-            bar.style.width = width + "%";
-            bar.style.background = `linear-gradient(90deg, hsl(${Math.random()*360},100%,70%), hsl(${Math.random()*360},100%,70%))`;
-          });
-
-          requestAnimationFrame(animate);
+        if(bars[i]){
+          bars[i].style.height = height + 'px';
+          bars[i].style.background = `linear-gradient(180deg, hsl(${Math.random()*360},100%,70%), hsl(${Math.random()*360},100%,70%))`;
         }
-
-        animate();
-      } catch (err) {
-        volumeText.textContent = '🚫 마이크 연결 실패... 😢';
-        console.error(err);
       }
+
+      // 볼륨 텍스트 업데이트 (평균 볼륨)
+      const avgVolume = frequencyData.reduce((a,b) => a+b, 0) / frequencyData.length;
+      volumeText.textContent = `🎧 현재 볼륨: ${avgVolume.toFixed(1)}`;
+
+      requestAnimationFrame(animate);
     }
 
-    initMic();
+    // 오디오 재생 시 AudioContext resume 필요 (특히 모바일)
+    audio.onplay = () => {
+      if(audioContext.state === 'suspended'){
+        audioContext.resume();
+      }
+      animate();
+    }
   </script>
 </body>
 </html>
